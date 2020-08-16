@@ -21,7 +21,7 @@ React Native TCP socket API for Android & iOS with **client SSL/TLS support**. I
 Install the library using either Yarn:
 
 ```
-yarn add react-native-tcp-socket
+yarn add react-native-tcp-socket@https://github.com/tungmt/react-native-tcp-socket
 ```
 
 or npm:
