@@ -113,7 +113,7 @@ RCT_EXPORT_METHOD(writeImage:(nonnull NSNumber*)cId
         CGFloat imgHeigth = uiImage.size.height;
         NSInteger width = (nWidth + 7) / 8 * 8;
         NSInteger height = imgHeigth * width / imgWidth;
-        HKPrinterBitmap *bitmap = [[HKPrinterBitmap alloc] initWithUIImage:uiImage maxWidth:(int)width];
+        PrinterBitmap *bitmap = [[PrinterBitmap alloc] initWithUIImage:uiImage maxWidth:(int)width];
         NSData *printData = [bitmap getDataForPrint];
 
         width /= 8;
