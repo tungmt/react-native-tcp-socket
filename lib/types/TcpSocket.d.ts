@@ -141,6 +141,16 @@ export default class TcpSocket extends EventEmitter {
      */
     write(buffer: string | Buffer | Uint8Array, encoding?: "ascii" | "utf8" | "utf-8" | "utf16le" | "ucs2" | "ucs-2" | "base64" | "latin1" | "binary" | "hex" | undefined, callback?: ((error: string | null) => void) | undefined): void;
     /**
+     * Sends data on the socket. The second parameter specifies the encoding in the case of a string — it defaults to UTF8 encoding.
+     *
+     * The optional callback parameter will be executed when the data is finally written out, which may not be immediately.
+     *
+     * @param {string} imageBase64String
+     * @param {dic} [options]
+     * @param {(error: string | null) => void} [callback]
+     */
+    writeImage(imageBase64String: string, options?: {}, callback?: ((error: string | null) => void) | undefined): void;
+    /**
      * @private
      * @param {string | Buffer | Uint8Array} buffer
      * @param {BufferEncoding} [encoding]

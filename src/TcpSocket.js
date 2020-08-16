@@ -296,6 +296,37 @@ export default class TcpSocket extends EventEmitter {
         );
     }
 
+        /**
+     * Sends data on the socket. The second parameter specifies the encoding in the case of a string — it defaults to UTF8 encoding.
+     *
+     * The optional callback parameter will be executed when the data is finally written out, which may not be immediately.
+     *
+     * @param {string} imageBase64String
+     * @param {array} [options]
+     * @param {(error: string | null) => void} [callback]
+     */
+    writeImage(imageBase64String, options, callback) {
+        const self = this;
+        if (this._state === STATE.DISCONNECTED) throw new Error('Socket is not connected.');
+
+        callback = callback || (() => {});
+        Sockets.writeImage(
+            this._id,
+            imageBase64String,
+            options,
+            /**
+             * @param {string} err
+             */
+            function(err) {
+                if (self._timeout) self._activateTimer();
+                if (callback) {
+                    if (err) return callback(err);
+                    callback(null);
+                }
+            }
+        );
+    }
+
     /**
      * @private
      * @param {string | Buffer | Uint8Array} buffer
