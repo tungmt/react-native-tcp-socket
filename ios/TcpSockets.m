@@ -5,6 +5,7 @@
 
 #import "TcpSockets.h"
 #import "TcpSocketClient.h"
+#import "PrinterBitmap.h"
 
 // offset native ids by 5000
 #define COUNTER_OFFSET 5000
@@ -90,6 +91,43 @@ RCT_EXPORT_METHOD(write:(nonnull NSNumber*)cId
     // TODO: use https://github.com/nicklockwood/Base64 for compatibility with earlier iOS versions
     NSData *data = [[NSData alloc] initWithBase64EncodedString:base64String options:0];
     [client writeData:data callback:callback];
+}
+
+RCT_EXPORT_METHOD(writeImage:(nonnull NSNumber*)cId
+                  string:(NSString *)base64String
+                  withOptions:(NSDictionary *) options
+                  callback:(RCTResponseSenderBlock)callback) {
+    TcpSocketClient* client = [self findClient:cId];
+    if (!client) return;
+    
+    @try{
+        NSInteger nWidth = [[options valueForKey:@"width"] integerValue];
+        if(!nWidth) nWidth = 490;
+        NSInteger lWidth = [[options valueForKey:@"label_width"] integerValue];
+        if(!lWidth) lWidth = 70;
+        NSInteger lHeight = [[options valueForKey:@"label_height"] integerValue];
+        if(!lHeight) lHeight = 100;
+        NSData *imageData = [[NSData alloc] initWithBase64EncodedString:base64String options:NSDataBase64DecodingIgnoreUnknownCharacters];
+        UIImage *uiImage = [[UIImage alloc] initWithData:imageData];
+        CGFloat imgWidth = uiImage.size.width;
+        CGFloat imgHeigth = uiImage.size.height;
+        NSInteger width = (nWidth + 7) / 8 * 8;
+        NSInteger height = imgHeigth * width / imgWidth;
+        HKPrinterBitmap *bitmap = [[HKPrinterBitmap alloc] initWithUIImage:uiImage maxWidth:(int)width];
+        NSData *printData = [bitmap getDataForPrint];
+
+        width /= 8;
+        
+        NSMutableData *command = [[NSMutableData alloc] init];
+        NSString *str = [NSString stringWithFormat:@ "SIZE %ld mm, %ld mm\r\nDIRECTION 1\r\nCLS\r\nBITMAP 0,0,%ld,%ld,0,", lWidth, lHeight, width, height];
+        [command appendData:[str dataUsingEncoding:CFStringConvertEncodingToNSStringEncoding(kCFStringEncodingGB_18030_2000)]];
+        [command appendData:printData];
+        [command appendData:[@"\r\nPRINT 1,1\r\n" dataUsingEncoding:CFStringConvertEncodingToNSStringEncoding(kCFStringEncodingGB_18030_2000)]];
+        [client writeData:command callback:callback];
+    }
+    @catch(NSException *e){
+        NSLog(@"ERROR IN PRINTING IMG: %@",[e callStackSymbols]);
+    }
 }
 
 RCT_EXPORT_METHOD(end:(nonnull NSNumber*)cId) {
