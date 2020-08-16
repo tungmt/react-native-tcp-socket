@@ -3,11 +3,15 @@ package com.asterinet.react.tcpsocket;
 
 import android.annotation.SuppressLint;
 import android.content.Context;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.net.ConnectivityManager;
 import android.net.NetworkCapabilities;
 import android.net.NetworkRequest;
+import android.os.Build;
 import android.util.Base64;
 import android.net.Network;
+import android.util.Log;
 
 import com.facebook.react.bridge.Arguments;
 import com.facebook.react.bridge.ReactApplicationContext;
@@ -20,9 +24,11 @@ import com.facebook.react.bridge.Callback;
 import com.facebook.react.modules.core.DeviceEventManagerModule;
 
 import java.io.IOException;
+import java.io.UnsupportedEncodingException;
 import java.net.Inet6Address;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
+import java.util.Vector;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -32,6 +38,7 @@ import java.util.concurrent.TimeUnit;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.annotation.RequiresApi;
 
 public class TcpSocketModule extends ReactContextBaseJavaModule implements TcpReceiverTask.OnDataReceivedListener {
     private static final String TAG = "TcpSockets";
@@ -72,6 +79,7 @@ public class TcpSocketModule extends ReactContextBaseJavaModule implements TcpRe
     @ReactMethod
     public void connect(@NonNull final Integer cId, @NonNull final String host, @NonNull final Integer port, @NonNull final ReadableMap options) {
         new GuardedAsyncTask<Void, Void>(mReactContext.getExceptionHandler()) {
+            @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
             @Override
             protected void doInBackgroundGuarded(Void... params) {
                 TcpSocketClient client = socketClients.get(cId);
@@ -108,6 +116,97 @@ public class TcpSocketModule extends ReactContextBaseJavaModule implements TcpRe
                 }
                 try {
                     socketClient.write(Base64.decode(base64String, Base64.NO_WRAP));
+                    if (callback != null) {
+                        callback.invoke();
+                    }
+                } catch (IOException e) {
+                    if (callback != null) {
+                        callback.invoke(e.toString());
+                    }
+                    onError(cId, e.toString());
+                }
+            }
+        }.executeOnExecutor(executorService);
+    }
+
+    @SuppressLint("StaticFieldLeak")
+    @SuppressWarnings("unused")
+    @ReactMethod
+    public void writeImage(@NonNull final Integer cId, @NonNull final String base64String, @Nullable final ReadableMap options, @Nullable final Callback callback) {
+        new GuardedAsyncTask<Void, Void>(mReactContext.getExceptionHandler()) {
+            private Vector<Byte> Command = null;
+
+            private void addStrToCommand(String str) {
+                byte[] bs = null;
+                if (!str.equals("")) {
+                    try {
+                        bs = str.getBytes("GB2312");
+                    } catch (UnsupportedEncodingException e) {
+                        e.printStackTrace();
+                    }
+                    for (int i = 0; i < bs.length; i++) {
+                        this.Command.add(Byte.valueOf(bs[i]));
+                    }
+                }
+            }
+
+            public Vector<Byte> getCommand() {
+                return this.Command;
+            }
+
+            @Override
+            protected void doInBackgroundGuarded(Void... params) {
+                TcpSocketClient socketClient = socketClients.get(cId);
+                if (socketClient == null) {
+                    return;
+                }
+                try {
+                    int nWidth = 490;
+                    int labelWidth = 70;
+                    int labelHeight = 100;
+                    if(options!=null){
+                        nWidth = options.hasKey("width") ? options.getInt("width") : 490;
+                        labelWidth = options.hasKey("label_width")?options.getInt("label_width") : 70;
+                        labelHeight = options.hasKey("label_height")?options.getInt("label_height") : 100;
+                    }
+
+                    byte[] bytes = Base64.decode(base64String, Base64.DEFAULT);
+                    Bitmap mBitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.length);
+                    int nMode = 0;
+                    if (mBitmap != null) {
+                        int width = (nWidth + 7) / 8 * 8;
+                        int height = mBitmap.getHeight() * width / mBitmap.getWidth();
+                        Log.d("BMP", "bmp.getWidth() " + mBitmap.getWidth());
+                        Bitmap grayBitmap = PrintUtils.toGrayscale(mBitmap);
+                        Bitmap rszBitmap = PrintUtils.resizeImage(grayBitmap, width, height);
+                        byte[] src = PrintUtils.bitmapToBWPix(rszBitmap);
+                        height = src.length / width;
+                        width /= 8;
+
+                        this.Command = new Vector(4096, 1024);
+
+                        byte[] bs = null;
+
+                        String str = "SIZE " + labelWidth + " mm, " + labelHeight + " mm\r\nDIRECTION 1\r\nCLS\r\nBITMAP 0,0," + width + "," + height + "," + 0 + ",";
+                        this.addStrToCommand(str);
+                        byte[] codecontent = PrintUtils.pixToTscCmd(src);
+
+                        for (int k = 0; k < codecontent.length; ++k) {
+                            this.Command.add(Byte.valueOf(codecontent[k]));
+                        }
+
+                        Log.d("TSCCommand", "codecontent" + codecontent);
+                        addStrToCommand("\r\nPRINT 1,1\r\n");
+
+                        Vector<Byte> finalBytes = this.getCommand();
+                        byte[] tosend = new byte[finalBytes.size()];
+                        for(int i=0;i<finalBytes.size();i++){
+                            tosend[i]= finalBytes.get(i);
+                        }
+
+                        socketClient.write(tosend);
+                    }
+
                     if (callback != null) {
                         callback.invoke();
                     }
@@ -194,6 +293,7 @@ public class TcpSocketModule extends ReactContextBaseJavaModule implements TcpRe
         }
     }
 
+    @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
     private void requestNetwork(final int transportType) throws InterruptedException {
         final NetworkRequest.Builder requestBuilder = new NetworkRequest.Builder();
         requestBuilder.addTransportType(transportType);
@@ -229,6 +329,7 @@ public class TcpSocketModule extends ReactContextBaseJavaModule implements TcpRe
      * "cellular" -> Cellular
      * etc...
      */
+    @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
     private void selectNetwork(@Nullable final String iface, @Nullable final String ipAddress) throws InterruptedException, IOException {
         currentNetwork.setNetwork(null);
         if (iface == null) return;
